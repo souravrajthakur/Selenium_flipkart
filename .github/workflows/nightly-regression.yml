@@ -22,6 +22,12 @@ jobs:
     env:
       CI: true
       TZ: Asia/Kolkata
+      SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM }}
+      MAIL_TO: ${{ secrets.MAIL_TO }}
 
     steps:
       - name: Checkout repository
@@ -70,6 +76,27 @@ jobs:
           name: allure-report
           path: target/allure-report
           if-no-files-found: ignore
+
+      - name: Send email report
+        if: always() && env.MAIL_TO != ''
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ env.SMTP_SERVER }}
+          server_port: ${{ env.SMTP_PORT }}
+          username: ${{ env.SMTP_USERNAME }}
+          password: ${{ env.SMTP_PASSWORD }}
+          subject: "Flipkart nightly regression: ${{ steps.regression-tests.outcome }}"
+          to: ${{ env.MAIL_TO }}
+          from: ${{ env.MAIL_FROM }}
+          body: |
+            Flipkart nightly regression finished with status: ${{ steps.regression-tests.outcome }}
+
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Run number: ${{ github.run_number }}
+
+            Reports are available in this workflow run:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
       - name: Fail workflow when tests fail
         if: steps.regression-tests.outcome == 'failure'
