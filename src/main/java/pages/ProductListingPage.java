@@ -34,7 +34,7 @@ public class ProductListingPage {
             $$x("//div[@data-id]//div[contains(@class,'hZ3P6w DeU9vF')]");
 
     private final SelenideElement nextPageButton =
-            $x("//span[text()='Next']");
+            $x("//a[.//span[normalize-space()='Next']]");
 
     @Step("Verify product cards contain name, price, rating and image")
     public void verifyProductCards() {
@@ -82,13 +82,13 @@ public class ProductListingPage {
 
     @Step("Scroll to pagination section")
     public void scrollToPagination() {
-        nextPageButton.shouldBe(visible).scrollIntoView(true);
+        nextPageButton.shouldBe(visible).scrollIntoView("{block: 'center'}");
     }
 
     @Step("Click on Next page button")
     public void clickNextPage() {
         nextPageButton.shouldBe(visible, enabled)
-                .scrollIntoView(true)
+                .scrollIntoView("{block: 'center'}")
                 .click();
     }
 

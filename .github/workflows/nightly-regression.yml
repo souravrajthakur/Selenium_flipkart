@@ -46,12 +46,157 @@ jobs:
       - name: Run TestNG regression suite
         id: regression-tests
         continue-on-error: true
-        run: mvn -B clean test
+        run: mvn -B -Dselenide.headless=true clean test
 
       - name: Generate Allure report
         if: always()
         continue-on-error: true
         run: mvn -B allure:report
+
+      - name: Generate email HTML report
+        if: always()
+        run: |
+          mkdir -p target/email-attachments
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+
+          const resultsDir = path.join('target', 'allure-results');
+          const outputFile = path.join('target', 'email-attachments', 'index.html');
+          const statuses = ['passed', 'failed', 'broken', 'skipped', 'unknown'];
+
+          function escapeHtml(value) {
+            return String(value ?? '')
+              .replaceAll('&', '&amp;')
+              .replaceAll('<', '&lt;')
+              .replaceAll('>', '&gt;')
+              .replaceAll('"', '&quot;')
+              .replaceAll("'", '&#39;');
+          }
+
+          function formatDuration(start, stop) {
+            if (!start || !stop || stop < start) {
+              return '-';
+            }
+
+            const seconds = Math.round((stop - start) / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${remainingSeconds}s`;
+          }
+
+          const results = fs.existsSync(resultsDir)
+            ? fs.readdirSync(resultsDir)
+                .filter((file) => file.endsWith('-result.json'))
+                .map((file) => {
+                  const fullPath = path.join(resultsDir, file);
+                  return JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+                })
+            : [];
+
+          const counts = Object.fromEntries(statuses.map((status) => [status, 0]));
+          for (const result of results) {
+            counts[result.status || 'unknown'] = (counts[result.status || 'unknown'] || 0) + 1;
+          }
+
+          const failedResults = results.filter((result) => ['failed', 'broken'].includes(result.status));
+          const generatedAt = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+          const workflowRunUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+
+          const rows = results
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+            .map((result) => `
+              <tr>
+                <td>${escapeHtml(result.name || result.fullName || 'Unnamed test')}</td>
+                <td><span class="status ${escapeHtml(result.status || 'unknown')}">${escapeHtml(result.status || 'unknown')}</span></td>
+                <td>${escapeHtml(formatDuration(result.start, result.stop))}</td>
+              </tr>
+            `)
+            .join('');
+
+          const failures = failedResults.length === 0
+            ? '<p class="muted">No failed or broken tests.</p>'
+            : failedResults.map((result) => `
+                <section class="failure">
+                  <h3>${escapeHtml(result.name || result.fullName || 'Unnamed test')}</h3>
+                  <p><strong>Status:</strong> ${escapeHtml(result.status)}</p>
+                  <pre>${escapeHtml(result.statusDetails?.message || result.statusDetails?.trace || 'No failure details available.')}</pre>
+                </section>
+              `).join('');
+
+          const html = `<!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <title>Flipkart Allure Regression Report</title>
+            <style>
+              body { margin: 0; font-family: Arial, sans-serif; color: #172033; background: #f5f7fb; }
+              .page { max-width: 1040px; margin: 0 auto; padding: 24px; }
+              .header { background: #2874f0; color: #fff; padding: 24px; border-radius: 8px; }
+              .header h1 { margin: 0 0 8px; font-size: 26px; }
+              .header p { margin: 4px 0; }
+              .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 18px 0; }
+              .metric { background: #fff; border: 1px solid #e1e6f0; border-radius: 8px; padding: 16px; }
+              .metric strong { display: block; font-size: 28px; margin-bottom: 4px; }
+              .panel { background: #fff; border: 1px solid #e1e6f0; border-radius: 8px; padding: 18px; margin-top: 18px; }
+              table { border-collapse: collapse; width: 100%; }
+              th, td { border-bottom: 1px solid #e9edf5; padding: 10px; text-align: left; vertical-align: top; }
+              th { background: #f8fafc; }
+              pre { white-space: pre-wrap; background: #101827; color: #eef4ff; padding: 12px; border-radius: 6px; overflow: auto; }
+              .status { display: inline-block; min-width: 68px; padding: 4px 8px; border-radius: 999px; text-align: center; font-weight: bold; font-size: 12px; text-transform: uppercase; }
+              .passed { background: #dcfce7; color: #166534; }
+              .failed, .broken { background: #fee2e2; color: #991b1b; }
+              .skipped { background: #fef3c7; color: #92400e; }
+              .unknown { background: #e5e7eb; color: #374151; }
+              .muted { color: #5c667a; }
+              .failure { border-top: 1px solid #e9edf5; padding-top: 12px; }
+              @media (max-width: 760px) { .summary { grid-template-columns: repeat(2, 1fr); } }
+            </style>
+          </head>
+          <body>
+            <main class="page">
+              <section class="header">
+                <h1>Flipkart Allure Regression Report</h1>
+                <p>Generated: ${escapeHtml(generatedAt)} IST</p>
+                <p>Repository: ${escapeHtml(process.env.GITHUB_REPOSITORY || '-')}</p>
+                <p>Branch: ${escapeHtml(process.env.GITHUB_REF_NAME || '-')} | Run: ${escapeHtml(process.env.GITHUB_RUN_NUMBER || '-')}</p>
+              </section>
+
+              <section class="summary">
+                <div class="metric"><strong>${results.length}</strong>Total</div>
+                <div class="metric"><strong>${counts.passed || 0}</strong>Passed</div>
+                <div class="metric"><strong>${counts.failed || 0}</strong>Failed</div>
+                <div class="metric"><strong>${counts.broken || 0}</strong>Broken</div>
+                <div class="metric"><strong>${counts.skipped || 0}</strong>Skipped</div>
+              </section>
+
+              <section class="panel">
+                <h2>Failed Tests</h2>
+                ${failures}
+              </section>
+
+              <section class="panel">
+                <h2>All Tests</h2>
+                <table>
+                  <thead>
+                    <tr><th>Test</th><th>Status</th><th>Duration</th></tr>
+                  </thead>
+                  <tbody>
+                    ${rows || '<tr><td colspan="3">No Allure result files were found.</td></tr>'}
+                  </tbody>
+                </table>
+              </section>
+
+              <section class="panel">
+                <p class="muted">Full interactive Allure assets are still uploaded in GitHub Actions artifacts. This attached index.html is the email-friendly Allure summary.</p>
+                <p class="muted">Workflow run: ${escapeHtml(workflowRunUrl)}</p>
+              </section>
+            </main>
+          </body>
+          </html>`;
+
+          fs.writeFileSync(outputFile, html);
+          EOF
 
       - name: Upload Surefire reports
         if: always()
@@ -88,6 +233,7 @@ jobs:
           subject: "Flipkart nightly regression: ${{ steps.regression-tests.outcome }}"
           to: ${{ env.MAIL_TO }}
           from: ${{ env.MAIL_FROM }}
+          attachments: target/email-attachments/index.html
           body: |
             Flipkart nightly regression finished with status: ${{ steps.regression-tests.outcome }}
 
@@ -95,8 +241,7 @@ jobs:
             Branch: ${{ github.ref_name }}
             Run number: ${{ github.run_number }}
 
-            Reports are available in this workflow run:
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            The email-friendly Allure report is attached as index.html.
 
       - name: Fail workflow when tests fail
         if: steps.regression-tests.outcome == 'failure'

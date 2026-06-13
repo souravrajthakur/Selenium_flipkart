@@ -19,8 +19,10 @@ public class BaseTest {
         Configuration.pageLoadStrategy = "eager";
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--remote-allow-origins=*");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
         if (isHeadless()) {
-            options.addArguments("--headless=chrome");
+            options.addArguments("--headless=new");
         }
         Configuration.browserCapabilities = new DesiredCapabilities();
         Configuration.browserCapabilities.setCapability (ChromeOptions.CAPABILITY, options);
@@ -28,8 +30,8 @@ public class BaseTest {
     }
 
     private boolean isHeadless() {
-        return System.getProperty("selenide.headless") != null
-                && System.getProperty("selenide.headless").equals("true");
+        return "true".equalsIgnoreCase(System.getProperty("selenide.headless"))
+                || "true".equalsIgnoreCase(System.getenv("CI"));
     }
 
     @AfterMethod
