@@ -1,0 +1,76 @@
+name: Nightly Regression Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs every day at 02:30 Asia/Kolkata (21:00 UTC).
+    - cron: "0 21 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-regression-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    name: Run Flipkart regression suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      CI: true
+      TZ: Asia/Kolkata
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Set up Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Run TestNG regression suite
+        id: regression-tests
+        continue-on-error: true
+        run: mvn -B clean test
+
+      - name: Generate Allure report
+        if: always()
+        continue-on-error: true
+        run: mvn -B allure:report
+
+      - name: Upload Surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports
+          if-no-files-found: ignore
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: target/allure-results
+          if-no-files-found: ignore
+
+      - name: Upload Allure HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: target/allure-report
+          if-no-files-found: ignore
+
+      - name: Fail workflow when tests fail
+        if: steps.regression-tests.outcome == 'failure'
+        run: exit 1

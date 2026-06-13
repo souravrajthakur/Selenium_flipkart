@@ -1,15 +1,15 @@
 package pages;
 
-import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.SelenideElement;
+import io.qameta.allure.Allure;
 import io.qameta.allure.Step;
 
-import java.time.Duration;
-
 import static com.codeborne.selenide.CollectionCondition.sizeGreaterThan;
-import static com.codeborne.selenide.Condition.*;
-import static com.codeborne.selenide.Selenide.*;
+import static com.codeborne.selenide.Condition.enabled;
+import static com.codeborne.selenide.Condition.visible;
+import static com.codeborne.selenide.Selenide.$$x;
+import static com.codeborne.selenide.Selenide.$x;
 
 public class ProductDetailsPage {
 
@@ -25,23 +25,18 @@ public class ProductDetailsPage {
     private final SelenideElement addToWishlistButton =
             $x("//span[contains(text(),'Wishlist')]");
 
-    // Main product image
     private final SelenideElement mainImage =
             $x("//img[contains(@class,'UCc1lI xD43kG GgrFN0')]");
 
-    // Thumbnail images carousel
     private final ElementsCollection imageThumbnails =
             $$x("//li[contains(@class,'gEHBBa bJvKyM')]//img");
 
-    // Zoom container (appears on hover)
     private final SelenideElement zoomContainer =
             $x("//div[contains(@class,'b_h3mK pMOtCI') or contains(@class,'pMOtCI')]");
 
-    // "Specifications" section header
     private final SelenideElement specificationsHeader =
             $x("//div[contains(text(),'Specifications')]");
 
-    // All specification rows
     private final ElementsCollection specificationRows =
             $$x("//div[contains(@class,'H0UCo8')]//tr");
 
@@ -90,42 +85,37 @@ public class ProductDetailsPage {
     @Step("Verify product image carousel is loaded")
     public void verifyImageCarouselLoaded() {
         mainImage.shouldBe(visible);
-        imageThumbnails.shouldHave(sizeGreaterThan(0));
+        imageThumbnails.filter(visible).shouldHave(sizeGreaterThan(0));
     }
 
     @Step("Verify zoom functionality on product image")
     public void verifyImageZoom() {
         mainImage.shouldBe(visible).hover();
-        sleep(2000);
         if (zoomContainer.exists()) {
             zoomContainer.shouldBe(visible);
         } else {
-            System.out.println("⚠️ Image zoom not available in this environment (likely headless)");
+            Allure.step("Image zoom is not available in this environment");
         }
     }
 
     @Step("Scroll through product images")
-    public void scrollThroughImages() throws InterruptedException {
-        Thread.sleep(2000);
-        imageThumbnails
-                .filter(visible)
-                .shouldHave(sizeGreaterThan(0));
-        for (SelenideElement thumbnail : imageThumbnails) {
+    public void scrollThroughImages() {
+        imageThumbnails.filter(visible).shouldHave(sizeGreaterThan(0));
+        for (SelenideElement thumbnail : imageThumbnails.filter(visible)) {
             thumbnail.scrollIntoView(true)
-                    .shouldBe(visible);
-            executeJavaScript("arguments[0].click();", thumbnail);
+                    .shouldBe(visible, enabled)
+                    .click();
             mainImage.shouldBe(visible);
         }
     }
 
     @Step("Verify all product specifications are visible")
-    public void verifyProductSpecificationsVisible() throws InterruptedException {
-        readMore.click();
-        Thread.sleep(3000);
-        specificationRows
-                .filter(visible)
-                .shouldHave(sizeGreaterThan(0));
-        for (SelenideElement spec : specificationRows) {
+    public void verifyProductSpecificationsVisible() {
+        if (readMore.exists()) {
+            readMore.shouldBe(visible, enabled).click();
+        }
+        specificationRows.filter(visible).shouldHave(sizeGreaterThan(0));
+        for (SelenideElement spec : specificationRows.filter(visible)) {
             spec.shouldBe(visible);
         }
     }

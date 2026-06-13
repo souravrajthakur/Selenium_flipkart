@@ -1,6 +1,5 @@
 package pages;
 
-import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.SelenideElement;
 import io.qameta.allure.Step;
@@ -10,9 +9,12 @@ import utils.WebBrowserUtils;
 import java.time.Duration;
 
 import static com.codeborne.selenide.CollectionCondition.sizeGreaterThan;
+import static com.codeborne.selenide.Condition.enabled;
 import static com.codeborne.selenide.Condition.text;
 import static com.codeborne.selenide.Condition.visible;
-import static com.codeborne.selenide.Selenide.*;
+import static com.codeborne.selenide.Selenide.$$;
+import static com.codeborne.selenide.Selenide.$$x;
+import static com.codeborne.selenide.Selenide.$x;
 
 public class SearchResultsPage {
 
@@ -40,11 +42,9 @@ public class SearchResultsPage {
     private final ElementsCollection productPrices =
             $$x("//div[@class='hZ3P6w DeU9vF']");
 
-    // All product cards on PLP
     private final ElementsCollection productCards =
             $$x("//div[@data-id]");
 
-    // Out of stock text inside product card
     private final By outOfStockLabel =
             By.xpath(".//*[contains(text(),'Out of Stock') or contains(text(),'Currently unavailable')]");
 
@@ -63,14 +63,14 @@ public class SearchResultsPage {
         brandDropdown.shouldBe(visible).click();
         brandResultExpand.shouldBe(visible).click();
         brandFilterHP.shouldBe(visible, Duration.ofSeconds(5)).click();
-        sleep(3000); // wait for filter to apply
+        waitForVisibleProducts();
     }
 
     @Step("Apply price filter from {min} to {max}")
-    public void applyPriceFilter(String min, String max) {
-        minPriceDropdown.selectOption(min);
-        sleep(2000);
-        maxPriceDropdown.selectOption(max);
+    public void applyPriceFilter(int min, int max) {
+        selectPriceOption(minPriceDropdown, min);
+        selectPriceOption(maxPriceDropdown, max);
+        waitForVisiblePrices();
     }
 
     @Step("Verify products belong to selected brand")
@@ -82,17 +82,10 @@ public class SearchResultsPage {
     }
 
     @Step("Verify products are within selected price range")
-    public void verifyPriceRange(int min, int max) throws InterruptedException {
-        Thread.sleep(2000);
-        productPrices
-                .filter(visible)
-                .shouldHave(sizeGreaterThan(0));
+    public void verifyPriceRange(int min, int max) {
+        waitForVisiblePrices();
         for (String priceText : productPrices.texts()) {
-            int value = Integer.parseInt(
-                    priceText.replace("₹", "")
-                            .replace(",", "")
-                            .trim()
-            );
+            int value = parsePrice(priceText);
             org.testng.Assert.assertTrue(
                     value >= min && value <= max,
                     "Price out of range: " + value
@@ -102,18 +95,16 @@ public class SearchResultsPage {
 
     @Step("Verify out-of-stock items are marked on PLP")
     public void verifyOutOfStockItemsVisible() {
-        sleep(2000);
-        productCards.shouldHave(sizeGreaterThan(0));
+        waitForVisibleProducts();
         boolean foundOutOfStock = false;
         for (SelenideElement card : productCards) {
             if (card.$(outOfStockLabel).exists()) {
                 card.$(outOfStockLabel).shouldBe(visible);
                 foundOutOfStock = true;
-                break;   // At least one is enough
+                break;
             }
         }
-        assert foundOutOfStock :
-                "No out-of-stock product found on PLP";
+        assert foundOutOfStock : "No out-of-stock product found on PLP";
     }
 
     @Step("Open first product from search results")
@@ -121,5 +112,22 @@ public class SearchResultsPage {
         $x("(//div[@data-id])[1]").shouldBe(visible).click();
         WebBrowserUtils.switchToLastTab();
         return new ProductDetailsPage();
+    }
+
+    private void waitForVisibleProducts() {
+        productCards.filter(visible).shouldHave(sizeGreaterThan(0));
+    }
+
+    private void waitForVisiblePrices() {
+        productPrices.filter(visible).shouldHave(sizeGreaterThan(0));
+    }
+
+    private int parsePrice(String priceText) {
+        return Integer.parseInt(priceText.replaceAll("[^0-9]", ""));
+    }
+
+    private void selectPriceOption(SelenideElement dropdown, int price) {
+        dropdown.shouldBe(visible, enabled)
+                .selectOptionContainingText(String.valueOf(price));
     }
 }
