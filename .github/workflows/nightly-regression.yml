@@ -45,7 +45,6 @@ jobs:
 
       - name: Run TestNG regression suite
         id: regression-tests
-        continue-on-error: true
         run: mvn -B -Dselenide.headless=true clean test
 
       - name: Generate Allure report
@@ -54,6 +53,7 @@ jobs:
         run: mvn -B allure:report
 
       - name: Generate email HTML report
+        id: email-report
         if: always()
         run: |
           mkdir -p target/email-attachments
@@ -113,6 +113,16 @@ jobs:
               </tr>
             `)
             .join('');
+
+          const testCaseLines = results
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+            .map((result, index) => {
+              const name = result.name || result.fullName || 'Unnamed test';
+              const status = (result.status || 'unknown').toUpperCase();
+              const duration = formatDuration(result.start, result.stop);
+              return `${index + 1}. ${name} - ${status} (${duration})`;
+            })
+            .join('\n');
 
           const failures = failedResults.length === 0
             ? '<p class="muted">No failed or broken tests.</p>'
@@ -196,6 +206,34 @@ jobs:
           </html>`;
 
           fs.writeFileSync(outputFile, html);
+
+          const plainBody = `Flipkart nightly regression report
+
+Total test cases: ${results.length}
+Passed: ${counts.passed || 0}
+Failed: ${counts.failed || 0}
+Broken: ${counts.broken || 0}
+Skipped: ${counts.skipped || 0}
+
+Test case report:
+${testCaseLines || 'No Allure result files were found.'}
+
+Failed or broken test details:
+${failedResults.length === 0
+  ? 'No failed or broken tests.'
+  : failedResults.map((result) => {
+      const name = result.name || result.fullName || 'Unnamed test';
+      const details = result.statusDetails?.message || result.statusDetails?.trace || 'No failure details available.';
+      return `- ${name}: ${details}`;
+    }).join('\n\n')}
+
+Repository: ${process.env.GITHUB_REPOSITORY || '-'}
+Branch: ${process.env.GITHUB_REF_NAME || '-'}
+Run number: ${process.env.GITHUB_RUN_NUMBER || '-'}
+
+The email-friendly Allure report is attached as index.html.`;
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `body<<EMAIL_BODY\n${plainBody}\nEMAIL_BODY\n`);
           EOF
 
       - name: Upload Surefire reports
@@ -234,15 +272,4 @@ jobs:
           to: ${{ env.MAIL_TO }}
           from: ${{ env.MAIL_FROM }}
           attachments: target/email-attachments/index.html
-          body: |
-            Flipkart nightly regression finished with status: ${{ steps.regression-tests.outcome }}
-
-            Repository: ${{ github.repository }}
-            Branch: ${{ github.ref_name }}
-            Run number: ${{ github.run_number }}
-
-            The email-friendly Allure report is attached as index.html.
-
-      - name: Fail workflow when tests fail
-        if: steps.regression-tests.outcome == 'failure'
-        run: exit 1
+          body: ${{ steps.email-report.outputs.body }}
