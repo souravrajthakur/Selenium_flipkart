@@ -114,6 +114,7 @@ jobs:
               </tr>
             `)
             .join('');
+            
           const testCaseLines = results
             .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
             .map((result, index) => {
