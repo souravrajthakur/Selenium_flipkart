@@ -104,7 +104,7 @@ public class SearchResultsPage {
                 break;
             }
         }
-        assert foundOutOfStock : "No out-of-stock product found on PLP";
+        org.testng.Assert.assertTrue(foundOutOfStock, "No out-of-stock product found on PLP");
     }
 
     @Step("Open first product from search results")

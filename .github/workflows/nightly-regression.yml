@@ -7,7 +7,7 @@ on:
     - cron: "0 21 * * *"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: nightly-regression-${{ github.ref }}
@@ -102,6 +102,7 @@ jobs:
           const failedResults = results.filter((result) => ['failed', 'broken'].includes(result.status));
           const generatedAt = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
           const workflowRunUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+          const githubPagesUrl = `https://${process.env.GITHUB_REPOSITORY_OWNER}.github.io/${process.env.GITHUB_REPOSITORY.split('/')[1]}`;
 
           const rows = results
             .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
@@ -199,7 +200,8 @@ jobs:
 
               <section class="panel">
                 <p class="muted">Full interactive Allure assets are still uploaded in GitHub Actions artifacts. This attached index.html is the email-friendly Allure summary.</p>
-                <p class="muted">Workflow run: ${escapeHtml(workflowRunUrl)}</p>
+                <p class="muted"><strong>View Full Allure Report:</strong> <a href="${escapeHtml(githubPagesUrl)}">${escapeHtml(githubPagesUrl)}</a></p>
+                <p class="muted">Workflow run: <a href="${escapeHtml(workflowRunUrl)}">${escapeHtml(workflowRunUrl)}</a></p>
               </section>
             </main>
           </body>
@@ -230,6 +232,7 @@ ${failedResults.length === 0
 Repository: ${process.env.GITHUB_REPOSITORY || '-'}
 Branch: ${process.env.GITHUB_REF_NAME || '-'}
 Run number: ${process.env.GITHUB_RUN_NUMBER || '-'}
+Full Allure Report: https://${process.env.GITHUB_REPOSITORY_OWNER}.github.io/${process.env.GITHUB_REPOSITORY.split('/')[1]}
 
 The email-friendly Allure report is attached as index.html.`;
 
@@ -257,8 +260,15 @@ The email-friendly Allure report is attached as index.html.`;
         uses: actions/upload-artifact@v4
         with:
           name: allure-report
-          path: target/allure-report
+          path: target/site/allure-maven-plugin
           if-no-files-found: ignore
+
+      - name: Deploy Allure Report to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: target/site/allure-maven-plugin
 
       - name: Send email report
         if: always() && env.MAIL_TO != ''

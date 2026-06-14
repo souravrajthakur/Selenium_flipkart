@@ -75,9 +75,9 @@ public class ProductListingPage {
         List<Integer> sortedPrices = new ArrayList<>(actualPrices);
         Collections.sort(sortedPrices);
 
-        assert actualPrices.equals(sortedPrices)
-                : "Products are NOT sorted Low to High\nActual: "
-                + actualPrices + "\nExpected: " + sortedPrices;
+        org.testng.Assert.assertEquals(actualPrices, sortedPrices,
+                "Products are NOT sorted Low to High\nActual: "
+                + actualPrices + "\nExpected: " + sortedPrices);
     }
 
     @Step("Scroll to pagination section")
