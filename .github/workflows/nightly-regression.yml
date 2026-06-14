@@ -113,7 +113,7 @@ jobs:
                 <td>${escapeHtml(formatDuration(result.start, result.stop))}</td>
               </tr>
             `)
-            .join('');f
+            .join('');
           const testCaseLines = results
             .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
             .map((result, index) => {
